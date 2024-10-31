@@ -1,7 +1,9 @@
+// src/services/exaClient.js
+import Exa from 'exa-js';
+
 class ExaClient {
   constructor(apiKey) {
-    this.apiKey = apiKey;
-    this.baseUrl = 'https://api.exa.ai/documents/search';
+    this.client = new Exa(apiKey);
   }
 
   async searchAndContents(query, options = {}) {
@@ -14,28 +16,23 @@ class ExaClient {
     };
 
     try {
-      const response = await fetch(this.baseUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          query,
-          ...defaultOptions
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.results;
+      const results = await this.client.searchAndContents(query, defaultOptions);
+      return results.results || [];
     } catch (error) {
       console.error('Exa search error:', error);
-      throw error;
+      // Rethrow with more specific error message
+      throw new Error(`Exa API error: ${error.message || 'Unknown error'}`);
     }
+  }
+
+  // Add additional methods for other Exa features
+  async findSimilarContent(url, options = {}) {
+    return this.client.findSimilarAndContents(url, {
+      numResults: 10,
+      text: true,
+      summary: true,
+      ...options
+    });
   }
 }
 

@@ -30,6 +30,11 @@ const Select = styled.select`
   border: 1px solid ${props => props.theme.colors.secondary};
   border-radius: 4px;
   margin-bottom: ${props => props.theme.spacing.sm};
+  
+  &:focus {
+    outline: none;
+    border-color: ${props => props.theme.colors.primary};
+  }
 `
 
 const KeywordContainer = styled.div`
@@ -63,30 +68,64 @@ const RemoveKeyword = styled.button`
   }
 `
 
+const ErrorMessage = styled.div`
+  color: ${props => props.theme.colors.error};
+  font-size: ${props => props.theme.typography.small};
+  margin-top: ${props => props.theme.spacing.xs};
+  margin-bottom: ${props => props.theme.spacing.sm};
+`
+
 export function ContentBrief() {
+  // Initialize all state variables
   const [topic, setTopic] = useState('');
   const [audience, setAudience] = useState('');
   const [contentType, setContentType] = useState('');
   const [keywords, setKeywords] = useState([]);
   const [keywordInput, setKeywordInput] = useState('');
+  const [error, setError] = useState('');
 
-  // Load saved values
+  // Load saved values on component mount
   useEffect(() => {
-    const savedTopic = localStorage.getItem('contentTopic');
-    const savedAudience = localStorage.getItem('targetAudience');
-    const savedContentType = localStorage.getItem('contentType');
-    const savedKeywords = JSON.parse(localStorage.getItem('seoKeywords') || '[]');
+    try {
+      // Load topic
+      const savedTopic = localStorage.getItem('contentTopic');
+      if (savedTopic) setTopic(savedTopic);
 
-    if (savedTopic) setTopic(savedTopic);
-    if (savedAudience) setAudience(savedAudience);
-    if (savedContentType) setContentType(savedContentType);
-    if (savedKeywords.length > 0) setKeywords(savedKeywords);
+      // Load audience
+      const savedAudience = localStorage.getItem('targetAudience');
+      if (savedAudience) setAudience(savedAudience);
+
+      // Load content type
+      const savedContentType = localStorage.getItem('contentType');
+      if (savedContentType) setContentType(savedContentType);
+
+      // Load and parse keywords with validation
+      const savedKeywords = localStorage.getItem('seoKeywords');
+      if (savedKeywords) {
+        const parsedKeywords = JSON.parse(savedKeywords);
+        if (Array.isArray(parsedKeywords)) {
+          setKeywords(parsedKeywords);
+        } else {
+          throw new Error('Saved keywords are not in valid format');
+        }
+      }
+    } catch (err) {
+      console.error('Error loading saved data:', err);
+      setError('Error loading saved data. Some values have been reset.');
+      setKeywords([]); // Reset to empty array
+      localStorage.setItem('seoKeywords', '[]'); // Reset localStorage
+    }
   }, []);
 
   const handleTopicChange = (e) => {
     const newTopic = e.target.value;
     setTopic(newTopic);
-    localStorage.setItem('contentTopic', newTopic);
+    try {
+      localStorage.setItem('contentTopic', newTopic);
+    } catch (err) {
+      console.error('Error saving topic:', err);
+      toast.error('Failed to save topic');
+    }
   };
 
   const handleTopicBlur = () => {
@@ -98,41 +137,69 @@ export function ContentBrief() {
   const handleAudienceChange = (e) => {
     const newAudience = e.target.value;
     setAudience(newAudience);
-    localStorage.setItem('targetAudience', newAudience);
+    try {
+      localStorage.setItem('targetAudience', newAudience);
+    } catch (err) {
+      console.error('Error saving audience:', err);
+      toast.error('Failed to save audience selection');
+    }
   };
 
   const handleContentTypeChange = (e) => {
     const newContentType = e.target.value;
     setContentType(newContentType);
-    localStorage.setItem('contentType', newContentType);
+    try {
+      localStorage.setItem('contentType', newContentType);
+    } catch (err) {
+      console.error('Error saving content type:', err);
+      toast.error('Failed to save content type');
+    }
   };
 
   const handleKeywordSubmit = (e) => {
     if (e.key === 'Enter' && keywordInput.trim()) {
-      const newKeyword = keywordInput.trim();
-      if (keywords.includes(newKeyword)) {
-        toast.error('Keyword already exists');
-        return;
+      try {
+        const newKeyword = keywordInput.trim();
+        
+        // Validate keyword isn't already in list
+        if (keywords.includes(newKeyword)) {
+          toast.error('Keyword already exists');
+          return;
+        }
+
+        // Ensure we're working with an array
+        const currentKeywords = Array.isArray(keywords) ? keywords : [];
+        const newKeywords = [...currentKeywords, newKeyword];
+        
+        // Update state and localStorage
+        setKeywords(newKeywords);
+        localStorage.setItem('seoKeywords', JSON.stringify(newKeywords));
+        setKeywordInput('');
+        toast.success('Keyword added');
+      } catch (err) {
+        console.error('Error adding keyword:', err);
+        toast.error('Failed to add keyword');
       }
-      
-      const newKeywords = [...keywords, newKeyword];
-      setKeywords(newKeywords);
-      localStorage.setItem('seoKeywords', JSON.stringify(newKeywords));
-      setKeywordInput('');
-      toast.success('Keyword added');
     }
   };
 
   const removeKeyword = (indexToRemove) => {
-    const newKeywords = keywords.filter((_, index) => index !== indexToRemove);
-    setKeywords(newKeywords);
-    localStorage.setItem('seoKeywords', JSON.stringify(newKeywords));
-    toast.success('Keyword removed');
+    try {
+      const newKeywords = keywords.filter((_, index) => index !== indexToRemove);
+      setKeywords(newKeywords);
+      localStorage.setItem('seoKeywords', JSON.stringify(newKeywords));
+      toast.success('Keyword removed');
+    } catch (err) {
+      console.error('Error removing keyword:', err);
+      toast.error('Failed to remove keyword');
+    }
   };
 
   return (
     <Section>
       <Title>Content Brief</Title>
+      {error && <ErrorMessage>{error}</ErrorMessage>}
+      
       <Input 
         placeholder="Enter your topic *"
         value={topic}
@@ -140,6 +207,7 @@ export function ContentBrief() {
         onBlur={handleTopicBlur}
         required
       />
+      
       <Select 
         value={audience}
         onChange={handleAudienceChange}
@@ -151,6 +219,7 @@ export function ContentBrief() {
         <option value="academic">Academic</option>
         <option value="business">Business</option>
       </Select>
+      
       <Select 
         value={contentType}
         onChange={handleContentTypeChange}
@@ -163,17 +232,24 @@ export function ContentBrief() {
         <option value="email">Email</option>
         <option value="press">Press Release</option>
       </Select>
+      
       <Input
         placeholder="Add SEO Keywords (Press Enter)"
         value={keywordInput}
         onChange={(e) => setKeywordInput(e.target.value)}
         onKeyPress={handleKeywordSubmit}
       />
+      
       <KeywordContainer>
-        {keywords.map((keyword, index) => (
+        {Array.isArray(keywords) && keywords.map((keyword, index) => (
           <Keyword key={index}>
             {keyword}
-            <RemoveKeyword onClick={() => removeKeyword(index)}>×</RemoveKeyword>
+            <RemoveKeyword 
+              onClick={() => removeKeyword(index)}
+              aria-label="Remove keyword"
+            >
+              ×
+            </RemoveKeyword>
           </Keyword>
         ))}
       </KeywordContainer>
